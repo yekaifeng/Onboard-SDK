@@ -34,6 +34,9 @@ main(int argc, char** argv)
     return -1;
   }
 
+    // Setup AmqpClient
+    AmqpClient::Channel::ptr_t connection = AmqpClient::Channel::Create("rabbit.kubernete.cn");
+
   // Obtain Control Authority
   vehicle->obtainCtrlAuthority(functionTimeout);
 

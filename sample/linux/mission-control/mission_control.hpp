@@ -25,6 +25,9 @@
 // Helpers
 #include <dji_linux_helpers.hpp>
 
+// SimpleAmqpClient library
+#include <SimpleAmqpClient/SimpleAmqpClient.h>
+
 #define C_EARTH (double)6378137.0
 #define DEG2RAD 0.01745329252
 
