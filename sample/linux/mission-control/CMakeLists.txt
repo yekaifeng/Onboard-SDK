@@ -18,6 +18,7 @@ if(NOT SIMPLEAMQPCLIENT_SOURCE)
     set(SIMPLEAMQPCLIENT_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../../../SimpleAmqpClient")
 endif()
 
+# SimpleAmqpClient library files
 SET(SAC_LIB_SRCS
         ${SIMPLEAMQPCLIENT_SOURCE}/SimpleAmqpClient/SimpleAmqpClient.h
 
@@ -61,6 +62,32 @@ SET(SAC_LIB_SRCS
 
 ADD_LIBRARY(SimpleAmqpClient ${SAC_LIB_SRCS})
 
+# Jsoncpp library files
+SET( JSONCPP_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../jsoncpp/include" )
+SET( JSONCPP_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../jsoncpp/src/lib_json" )
+
+SET( PUBLIC_HEADERS
+        ${JSONCPP_INCLUDE_DIR}/json/config.h
+        ${JSONCPP_INCLUDE_DIR}/json/forwards.h
+        ${JSONCPP_INCLUDE_DIR}/json/features.h
+        ${JSONCPP_INCLUDE_DIR}/json/value.h
+        ${JSONCPP_INCLUDE_DIR}/json/reader.h
+        ${JSONCPP_INCLUDE_DIR}/json/writer.h
+        ${JSONCPP_INCLUDE_DIR}/json/assertions.h
+        ${JSONCPP_INCLUDE_DIR}/json/version.h
+        )
+
+SET(jsoncpp_sources
+        ${JSONCPP_SRC_DIR}/json_tool.h
+        ${JSONCPP_SRC_DIR}/json_reader.cpp
+        ${JSONCPP_SRC_DIR}/json_valueiterator.inl
+        ${JSONCPP_SRC_DIR}/json_value.cpp
+        ${JSONCPP_SRC_DIR}/json_writer.cpp
+        ${JSONCPP_SRC_DIR}/version.h.in)
+
+ADD_LIBRARY(jsoncpp_lib SHARED ${PUBLIC_HEADERS} ${jsoncpp_sources})
+
+
 include_directories(${ONBOARDSDK_SOURCE}/api/inc)
 include_directories(${ONBOARDSDK_SOURCE}/utility/inc)
 include_directories(${ONBOARDSDK_SOURCE}/hal/inc)
@@ -74,6 +101,6 @@ FILE(GLOB SOURCE_FILES *.hpp *.cpp
         )
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
-target_link_libraries(${PROJECT_NAME} djiosdk-core SimpleAmqpClient ${Rabbitmqc_LIBRARY} ${Boost_LIBRARIES} ${SOCKET_LIBRARY})
+target_link_libraries(${PROJECT_NAME} djiosdk-core SimpleAmqpClient jsoncpp_lib ${Rabbitmqc_LIBRARY} ${Boost_LIBRARIES} ${SOCKET_LIBRARY})
 
 

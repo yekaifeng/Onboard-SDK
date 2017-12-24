@@ -13,6 +13,12 @@
  * */
 
 #include "mission_control.hpp"
+#include <amqp.h>
+
+#include <boost/array.hpp>
+
+#include <algorithm>
+#include <iostream>
 
 using namespace DJI::OSDK;
 using namespace DJI::OSDK::Telemetry;
@@ -35,8 +41,15 @@ main(int argc, char** argv)
   }
 
     // Setup AmqpClient
-    AmqpClient::Channel::ptr_t connection = AmqpClient::Channel::Create("rabbit.kubernete.cn");
+    AmqpClient::Channel::ptr_t channel = AmqpClient::Channel::Create("rabbit.kubernete.cn",
+                                                                     5672,"admin","ois@pass","/", 4096);
+    AmqpClient::BasicMessage::ptr_t message = AmqpClient::BasicMessage::Create("message body");
+    channel->DeclareExchange("uav2017", AmqpClient::Channel::EXCHANGE_TYPE_FANOUT);
+    channel->BasicPublish("uav2017", "", message);
 
+  Json::Reader reader;
+  Json::Value root;
+  
   // Obtain Control Authority
   vehicle->obtainCtrlAuthority(functionTimeout);
 

@@ -28,6 +28,9 @@
 // SimpleAmqpClient library
 #include <SimpleAmqpClient/SimpleAmqpClient.h>
 
+// Jsoncpp library
+#include "json/json.h"
+
 #define C_EARTH (double)6378137.0
 #define DEG2RAD 0.01745329252
 
