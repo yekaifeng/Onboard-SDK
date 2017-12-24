@@ -42,7 +42,7 @@ main(int argc, char** argv)
 
     // Setup AmqpClient
     AmqpClient::Channel::ptr_t channel = AmqpClient::Channel::Create("rabbit.kubernete.cn",
-                                                                     5672,"admin","ois@pass","/", 4096);
+                                                                     5672,"admin","xxxx","/", 4096);
     AmqpClient::BasicMessage::ptr_t message = AmqpClient::BasicMessage::Create("message body");
     channel->DeclareExchange("uav2017", AmqpClient::Channel::EXCHANGE_TYPE_FANOUT);
     channel->BasicPublish("uav2017", "", message);
