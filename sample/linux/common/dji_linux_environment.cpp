@@ -69,6 +69,24 @@ DJI_Environment::getBaudrate() const
   return baudrate;
 }
 
+const std::string&
+DJI_Environment::getRemoteHost() const
+{
+  return remotehost;
+}
+
+const std::string&
+DJI_Environment::getUser() const
+{
+  return user;
+}
+
+const std::string&
+DJI_Environment::getPasswd() const
+{
+  return passwd;
+}
+
 bool
 DJI_Environment::getConfigResult() const
 {
@@ -84,6 +102,7 @@ DJI_Environment::parse(std::string config_file_path)
   int         id;
 
   bool setID = false, setKey = false, setBaud = false, setSerialDevice = false;
+  bool setRemoteHost = false, setUser = false, setPasswd = false;
   bool result = false;
 
   std::ifstream read(config_file_path);
@@ -114,9 +133,21 @@ DJI_Environment::parse(std::string config_file_path)
         {
           setBaud = true;
         }
+        if (sscanf(line, "remote_host : %d", &this->remotehost))
+        {
+          setRemoteHost = true;
+        }
+        if (sscanf(line, "user : %d", &this->user))
+        {
+          setUser = true;
+        }
+        if (sscanf(line, "password : %d", &this->passwd))
+        {
+          setPasswd = true;
+        }
       }
     }
-    if (setBaud && setID && setKey && setSerialDevice)
+    if (setBaud && setID && setKey && setSerialDevice && setRemoteHost && setUser && setPasswd)
     {
       std::cout << "User Configuration read successfully. \n\n";
       result = true;

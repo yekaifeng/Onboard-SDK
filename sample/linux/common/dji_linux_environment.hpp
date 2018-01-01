@@ -30,6 +30,9 @@ public:
   const std::string& getDevice() const;
   unsigned int       getBaudrate() const;
   bool               getConfigResult() const;
+  const std::string& getRemoteHost() const;
+  const std::string& getUser() const;
+  const std::string& getPasswd() const;
   bool parse(std::string config_file_path);
 
 private:
@@ -37,6 +40,9 @@ private:
   int          app_id;
   std::string  enc_key;
   std::string  device;
+  std::string  remotehost;
+  std::string  user;
+  std::string  passwd;
   unsigned int baudrate;
   bool         config_read_result;
 };

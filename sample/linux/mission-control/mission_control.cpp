@@ -19,9 +19,118 @@
 
 #include <algorithm>
 #include <iostream>
+#include <thread>
+#include <unistd.h>
+#include <MacTypes.h>
 
 using namespace DJI::OSDK;
 using namespace DJI::OSDK::Telemetry;
+
+
+std::string getCurrentTime()
+{
+  time_t rawtime;
+  struct tm * timeinfo;
+  char buffer[80];
+
+  time (&rawtime);
+  timeinfo = localtime(&rawtime);
+
+  strftime(buffer,sizeof(buffer),"%d-%m-%Y %I:%M:%S",timeinfo);
+  std::string str(buffer);
+
+  return str;
+}
+
+std::string getHostname()
+{
+  char hostname[32];
+  int result;
+  result = gethostname(hostname, 32);
+  if (result == 0) {
+    std::string str(hostname);
+    return str;
+  } else {
+    return "_hostname_";
+  }
+
+}
+
+void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string& host, const std::string& user, const std::string& passwd)
+{
+  bool running = true;
+  int syncDataIntervalInMs = 1000;
+  while(running) {
+    try {
+      std::string exchangeName = getHostname();
+      AmqpClient::Channel::ptr_t channel = AmqpClient::Channel::Create(host, 5672, user, passwd, "/", 4096);
+      channel->DeclareExchange(exchangeName, AmqpClient::Channel::EXCHANGE_TYPE_FANOUT);
+      AmqpClient::BasicMessage::ptr_t message = AmqpClient::BasicMessage::Create("== messageStart ==");
+      channel->BasicPublish(exchangeName, "", message);
+
+      // We will listen to five broadcast data sets:
+      // 1. Flight Status
+      // 2. Global Position
+      // 3. RC Channels
+      // 4. Velocity
+      // 5. Quaternion
+
+      // Please make sure your drone is in simulation mode. You can
+      // fly the drone with your RC to get different values.
+
+      Telemetry::Status         status;
+      Telemetry::GlobalPosition globalPosition;
+      Telemetry::RC             rc;
+      Telemetry::Vector3f       velocity;
+      Telemetry::Quaternion     quaternion;
+
+      const int TIMEOUT = 20;
+
+      // Re-set Broadcast frequencies to their default values
+      ACK::ErrorCode ack = vehicle->broadcast->setBroadcastFreqDefaults(TIMEOUT);
+      //Json::Reader reader;
+      Json::Value root;
+
+      Json::FastWriter writer;
+      Json::Value flightData;
+
+      while (running) {
+        // Get data of flight status
+        status         = vehicle->broadcast->getStatus();
+        globalPosition = vehicle->broadcast->getGlobalPosition();
+        rc             = vehicle->broadcast->getRC();
+        velocity       = vehicle->broadcast->getVelocity();
+        quaternion     = vehicle->broadcast->getQuaternion();
+
+
+        flightData["flight_status"] = (unsigned)status.flight;
+        flightData["position_latitude"] = globalPosition.latitude;
+        flightData["position_longitude"] = globalPosition.longitude;
+        flightData["position_altitude"] = globalPosition.altitude;
+        flightData["velocity_vx"] = velocity.x;
+        flightData["velocity_vy"] = velocity.y;
+        flightData["velocity_vz"] = velocity.z;
+        flightData["quaternion_w"] = quaternion.q0;
+        flightData["quaternion_x"] = quaternion.q1;
+        flightData["quaternion_y"] = quaternion.q2;
+        flightData["quaternion_z"] = quaternion.q3;
+        root.append(flightData);
+        std::string json_str = writer.write(root);
+
+        message = AmqpClient::BasicMessage::Create(json_str);
+        channel->BasicPublish(exchangeName, "", message);
+        std::cout << "data sent: " << (unsigned)status.flight << std::endl;
+        usleep(syncDataIntervalInMs);
+      }
+    }
+    catch (...) {
+      std::exception_ptr p = std::current_exception();
+      std::cerr << "channel send exception" << std::endl;
+    }
+    std::cout << "restaring ... " + getCurrentTime() << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+  }
+}
 
 /*! main
  *
@@ -31,6 +140,10 @@ main(int argc, char** argv)
 {
   // Initialize variables
   int functionTimeout = 1;
+  int retryConnectInterval = 2;
+  std::string remoteHost;
+  std::string user;
+  std::string passwd;
 
   // Setup OSDK.
   Vehicle* vehicle = setupOSDK(argc, argv);
@@ -40,19 +153,51 @@ main(int argc, char** argv)
     return -1;
   }
 
-    // Setup AmqpClient
-    AmqpClient::Channel::ptr_t channel = AmqpClient::Channel::Create("rabbit.kubernete.cn",
-                                                                     5672,"admin","xxxx","/", 4096);
-    AmqpClient::BasicMessage::ptr_t message = AmqpClient::BasicMessage::Create("message body");
-    channel->DeclareExchange("uav2017", AmqpClient::Channel::EXCHANGE_TYPE_FANOUT);
-    channel->BasicPublish("uav2017", "", message);
-
-  Json::Reader reader;
-  Json::Value root;
-  
   // Obtain Control Authority
   vehicle->obtainCtrlAuthority(functionTimeout);
 
+  // Config file loading
+  std::string config_file_path;
+  if (argc > 1)
+  {
+    config_file_path = argv[1];
+    DJI_Environment* environment = new DJI_Environment(config_file_path);
+    if (!environment->getConfigResult())
+    {
+      // We were unable to read the config file. Exit.
+      return -1;
+    }
+    remoteHost = environment->getRemoteHost().c_str();
+    user = environment->getUser.c_str();
+    passwd = environment->getPasswd.c_str();
+    if (remoteHost == "" || user == "" || passwd == "")
+    {
+      std::cerr << "message server config not found" << std::endl;
+      return -1;
+
+    }
+  }
+
+  try {
+      //create message send thread
+      std::cout << "starting message tx channel thread ...\n";
+      std::thread msgtx_thread(vehicle, channelSend, remoteHost, user, passwd);
+
+      msgtx_thread.join();
+  }
+  catch (...) {
+      std::exception_ptr p = std::current_exception();
+      std::cerr << "main routine exception" << std::endl;
+
+  }
+
+
+
+
+
+
+
+/*
   // Display interactive prompt
   std::cout
     << "| Available commands:                                            |"
@@ -82,10 +227,13 @@ main(int argc, char** argv)
     default:
       break;
   }
-
+*/
   delete (vehicle);
   return 0;
 }
+
+
+
 
 /*! Monitored Takeoff (Blocking API call). Return status as well as ack.
     This version of takeoff makes sure your aircraft actually took off
