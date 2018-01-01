@@ -35,7 +35,7 @@ std::string getCurrentTime()
   time (&rawtime);
   timeinfo = localtime(&rawtime);
 
-  strftime(buffer,sizeof(buffer),"%d-%m-%Y %I:%M:%S",timeinfo);
+  strftime(buffer,sizeof(buffer),"%Y-%m-%d %H:%M:%S",timeinfo);
   std::string str(buffer);
 
   return str;
@@ -58,7 +58,7 @@ std::string getHostname()
 void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std::string user, const std::string passwd)
 {
   bool running = true;
-  int syncDataIntervalInMs = 1000;
+  int syncDataIntervalInMs = 1000000;
   while(running) {
     try {
       std::string exchangeName = getHostname();
@@ -92,9 +92,12 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
 
       Json::FastWriter writer;
       Json::Value flightData;
+      std::string json_str;
+      std::string currentTime;
 
       while (running) {
         // Get data of flight status
+        currentTime = getCurrentTime();
         status         = vehicle->broadcast->getStatus();
         globalPosition = vehicle->broadcast->getGlobalPosition();
         rc             = vehicle->broadcast->getRC();
@@ -113,12 +116,14 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
         flightData["quaternion_x"] = quaternion.q1;
         flightData["quaternion_y"] = quaternion.q2;
         flightData["quaternion_z"] = quaternion.q3;
-        root.append(flightData);
-        std::string json_str = writer.write(root);
+        root["basic_data"] = flightData;
+        root["timestamp"] = currentTime;
+        json_str = "";
+        json_str = writer.write(root);
 
         message = AmqpClient::BasicMessage::Create(json_str);
         channel->BasicPublish(exchangeName, "", message);
-        std::cout << "data sent: " << (unsigned)status.flight << std::endl;
+        std::cout << "data sent: " << (unsigned)status.flight << currentTime << std::endl;
         usleep(syncDataIntervalInMs);
       }
     }
