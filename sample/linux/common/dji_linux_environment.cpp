@@ -100,6 +100,9 @@ DJI_Environment::parse(std::string config_file_path)
   static char key[70];
   char        devName[20];
   int         id;
+  char        remotehost[64];
+  char        user[32];
+  char        passwd[64];
 
   bool setID = false, setKey = false, setBaud = false, setSerialDevice = false;
   bool setRemoteHost = false, setUser = false, setPasswd = false;
@@ -133,20 +136,31 @@ DJI_Environment::parse(std::string config_file_path)
         {
           setBaud = true;
         }
-        if (sscanf(line, "remote_host : %d", &this->remotehost))
+        if (sscanf(line, "remote_host : %s", remotehost))
         {
+          this->remotehost = std::string(remotehost);
           setRemoteHost = true;
         }
-        if (sscanf(line, "user : %d", &this->user))
+        if (sscanf(line, "user : %s", user))
         {
+          this->user = std::string(user);
           setUser = true;
         }
-        if (sscanf(line, "password : %d", &this->passwd))
+        if (sscanf(line, "password : %s", passwd))
         {
+          this->passwd = std::string(passwd);
           setPasswd = true;
         }
       }
     }
+    std::cout << "App ID:" << this->getApp_id() << std::endl;
+    std::cout << "App Key:" << this->getEnc_key() << std::endl;
+    std::cout << "Device:" << this->getDevice() << std::endl;
+    std::cout << "Baudrate:" << this->getBaudrate() << std::endl;
+    std::cout << "Remote Host:" << this->getRemoteHost() << std::endl;
+    std::cout << "User:" << this->getUser() << std::endl;
+    std::cout << "Password:" << this->getPasswd() << std::endl;
+
     if (setBaud && setID && setKey && setSerialDevice && setRemoteHost && setUser && setPasswd)
     {
       std::cout << "User Configuration read successfully. \n\n";
