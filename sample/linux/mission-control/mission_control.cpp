@@ -21,7 +21,6 @@
 #include <iostream>
 #include <thread>
 #include <unistd.h>
-#include <MacTypes.h>
 
 using namespace DJI::OSDK;
 using namespace DJI::OSDK::Telemetry;
@@ -56,7 +55,7 @@ std::string getHostname()
 
 }
 
-void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string& host, const std::string& user, const std::string& passwd)
+void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std::string user, const std::string passwd)
 {
   bool running = true;
   int syncDataIntervalInMs = 1000;
@@ -168,8 +167,8 @@ main(int argc, char** argv)
       return -1;
     }
     remoteHost = environment->getRemoteHost().c_str();
-    user = environment->getUser.c_str();
-    passwd = environment->getPasswd.c_str();
+    user = environment->getUser().c_str();
+    passwd = environment->getPasswd().c_str();
     if (remoteHost == "" || user == "" || passwd == "")
     {
       std::cerr << "message server config not found" << std::endl;
@@ -181,7 +180,7 @@ main(int argc, char** argv)
   try {
       //create message send thread
       std::cout << "starting message tx channel thread ...\n";
-      std::thread msgtx_thread(vehicle, channelSend, remoteHost, user, passwd);
+      std::thread msgtx_thread(channelSend, vehicle, remoteHost, user, passwd);
 
       msgtx_thread.join();
   }
