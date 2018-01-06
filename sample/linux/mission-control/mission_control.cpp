@@ -61,7 +61,7 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
   int syncDataIntervalInMs = 1000000;
   while(running) {
     try {
-      std::string exchangeName = getHostname();
+      std::string exchangeName = getHostname() + "-uplink";
       AmqpClient::Channel::ptr_t channel = AmqpClient::Channel::Create(host, 5672, user, passwd, "/", 4096);
       channel->DeclareExchange(exchangeName, AmqpClient::Channel::EXCHANGE_TYPE_FANOUT);
       AmqpClient::BasicMessage::ptr_t message = AmqpClient::BasicMessage::Create("== messageStart ==");
@@ -87,9 +87,8 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
 
       // Re-set Broadcast frequencies to their default values
       ACK::ErrorCode ack = vehicle->broadcast->setBroadcastFreqDefaults(TIMEOUT);
-      //Json::Reader reader;
+      //Json Writer;
       Json::Value root;
-
       Json::FastWriter writer;
       Json::Value flightData;
       std::string json_str;
@@ -135,6 +134,78 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
     std::this_thread::sleep_for(std::chrono::seconds(3));
   }
 }
+
+void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const std::string user, const std::string passwd)
+{
+  bool running = true;
+  //0.5 second
+  int syncDataIntervalInMs = 500000;
+  while(running) {
+    try {
+      std::string exchangeName = getHostname() + "-downlink";
+      AmqpClient::Channel::ptr_t channel = AmqpClient::Channel::Create(host, 5672, user, passwd, "/", 4096);
+      channel->DeclareExchange(exchangeName, AmqpClient::Channel::EXCHANGE_TYPE_FANOUT);
+      std::string queueName = channel->DeclareQueue("");
+      channel->BindQueue(queueName, exchangeName);
+      std::string consumer = channel->BasicConsume(queueName, "", true, false);
+      AmqpClient::Envelope::ptr_t envelope;
+
+      //Json Reader
+      Json::Value root;
+      Json::Reader reader;
+      std::string data;
+      std::string msg_type;
+
+      while(running) {
+        channel->BasicConsumeMessage(consumer, envelope, -1);
+        std::cout << envelope->Message()->Body() << std::endl;
+        data = envelope->Message()->Body();
+        channel->BasicAck(envelope);
+
+        if(!reader.parse(data, root, false)) {
+          std::cout << "no data" << std::endl;
+          continue;
+        }
+        msg_type = root.getMemberNames().begin()[0];
+        if (msg_type == "TakeOffRequest"){
+          Json::Value v = root["TakeOffRequest"];
+          int time_out = v["time_out"].asInt();
+          std::cout << "Monitor take off ..." << std::endl;
+          monitoredTakeoff(vehicle, time_out);
+          continue;
+        }
+        if (msg_type == "LandingRequest"){
+          Json::Value v = root["LandingRequest"];
+          int time_out = v["time_out"].asInt();
+          monitoredLanding(vehicle, time_out);
+          std::cout << "Monitor landing ..." << std::endl;
+          continue;
+        }
+        if (msg_type == "WayPointRequest"){
+          std::cout << "Go WayPoings ..." << std::endl;
+          continue;
+        }
+        if (msg_type == "MoveOffsetRequest"){
+          std::cout << "Move Offset ..." << std::endl;
+          continue;
+        }
+        if (msg_type == "TelemetryRequest"){
+          std::cout << "Telemetry Request ..." << std::endl;
+          continue;
+        }
+
+      }
+
+    }
+    catch (...) {
+      std::exception_ptr p = std::current_exception();
+      std::cerr << "channel receive exception" << std::endl;
+    }
+    std::cout << "restaring ... " + getCurrentTime() << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+  }}
+
 
 /*! main
  *
@@ -186,8 +257,10 @@ main(int argc, char** argv)
       //create message send thread
       std::cout << "starting message tx channel thread ...\n";
       std::thread msgtx_thread(channelSend, vehicle, remoteHost, user, passwd);
+      std::thread msgrx_thread(channelReceive, vehicle, remoteHost, user, passwd);
 
       msgtx_thread.join();
+      msgrx_thread.join();
   }
   catch (...) {
       std::exception_ptr p = std::current_exception();
