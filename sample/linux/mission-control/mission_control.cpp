@@ -25,6 +25,7 @@
 using namespace DJI::OSDK;
 using namespace DJI::OSDK::Telemetry;
 
+bool monitor_switch = true;
 
 std::string getCurrentTime()
 {
@@ -94,7 +95,7 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
       std::string json_str;
       std::string currentTime;
 
-      while (running) {
+      while (monitor_switch) {
         // Get data of flight status
         currentTime = getCurrentTime();
         status         = vehicle->broadcast->getStatus();
@@ -126,9 +127,10 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
         usleep(syncDataIntervalInMs);
       }
     }
-    catch (...) {
+    catch (const std::exception & ex) {
       std::exception_ptr p = std::current_exception();
       std::cerr << "channel send exception" << std::endl;
+      std::cerr << ex.what() << std::endl;
     }
     std::cout << "restaring ... " + getCurrentTime() << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -167,6 +169,7 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
           continue;
         }
         msg_type = root.getMemberNames().begin()[0];
+        std::cout << "CMD:" << msg_type << std::endl;
         if (msg_type == "TakeOffRequest"){
           Json::Value v = root["TakeOffRequest"];
           int time_out = v["time_out"].asInt();
@@ -193,13 +196,20 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
           std::cout << "Telemetry Request ..." << std::endl;
           continue;
         }
+        if (msg_type == "Monitoring"){
+          std::cout << "Monitoring Request ..." << std::endl;
+          monitor_switch = root["Monitoring"].asBool();
+          std::cout << "Monitoring:" <<  monitor_switch << std::endl;
+          continue;
+        }
 
       }
 
     }
-    catch (...) {
+    catch (const std::exception & ex) {
       std::exception_ptr p = std::current_exception();
       std::cerr << "channel receive exception" << std::endl;
+      std::cerr << ex.what() << std::endl;
     }
     std::cout << "restaring ... " + getCurrentTime() << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -257,15 +267,16 @@ main(int argc, char** argv)
       //create message send thread
       std::cout << "starting message tx channel thread ...\n";
       std::thread msgtx_thread(channelSend, vehicle, remoteHost, user, passwd);
+      std::cout << "starting message rx channel thread ...\n";
       std::thread msgrx_thread(channelReceive, vehicle, remoteHost, user, passwd);
 
       msgtx_thread.join();
       msgrx_thread.join();
   }
-  catch (...) {
+  catch (const std::exception & ex) {
       std::exception_ptr p = std::current_exception();
       std::cerr << "main routine exception" << std::endl;
-
+      std::cerr << ex.what() << std::endl;
   }
 
 
