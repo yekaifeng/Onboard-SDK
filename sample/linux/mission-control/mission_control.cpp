@@ -109,6 +109,10 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
         flightData["position_latitude"] = globalPosition.latitude;
         flightData["position_longitude"] = globalPosition.longitude;
         flightData["position_altitude"] = globalPosition.altitude;
+        flightData["rc_roll"] = rc.roll;
+        flightData["rc_pitch"] = rc.pitch;
+        flightData["rc_yaw"] = rc.yaw;
+        flightData["rc_throttle"] = rc.throttle;
         flightData["velocity_vx"] = velocity.x;
         flightData["velocity_vy"] = velocity.y;
         flightData["velocity_vz"] = velocity.z;
@@ -140,8 +144,10 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
 void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const std::string user, const std::string passwd)
 {
   bool running = true;
+  bool inprogress = false;
   //0.5 second
   int syncDataIntervalInMs = 500000;
+  int responseTimeout = 10;
   while(running) {
     try {
       std::string exchangeName = getHostname() + "-downlink";
@@ -170,6 +176,13 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
         }
         msg_type = root.getMemberNames().begin()[0];
         std::cout << "CMD:" << msg_type << std::endl;
+        if (msg_type == "GohomeRequest"){
+          Json::Value v = root["GohomeRequest"];
+          int time_out = v["time_out"].asInt();
+          std::cout << "Going Home ..." << std::endl;
+          vehicle->control->goHome(time_out);
+          continue;
+        }
         if (msg_type == "TakeOffRequest"){
           Json::Value v = root["TakeOffRequest"];
           int time_out = v["time_out"].asInt();
@@ -186,10 +199,61 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
         }
         if (msg_type == "WayPointRequest"){
           std::cout << "Go WayPoings ..." << std::endl;
+          Json::Value wp_array = root["WayPointRequest"];
+
+          // starting height of vehicle
+          float32_t start_alt = 10;
+          int numWaypoints = wp_array.size();
+
+          // Waypoint Mission: Create Waypoints
+          std::vector<DJI::OSDK::WayPointSettings> generatedWaypts = createWaypoints(wp_array);
+
+          // Waypoint Mission : Initialization
+          ACK::ErrorCode initAck = vehicle->missionManager->init(
+                  DJI_MISSION_TYPE::WAYPOINT, responseTimeout, &generatedWaypts);
+          if (ACK::getError(initAck))
+          {
+              ACK::getErrorCodeMessage(initAck, __func__);
+          }
+
+          vehicle->missionManager->printInfo();
+          std::cout << "Initializing Waypoint Mission..\n";
+
+          // Waypoint Mission: Start
+          ACK::ErrorCode startAck =
+                  vehicle->missionManager->wpMission->start(responseTimeout);
+          if (ACK::getError(startAck))
+          {
+            ACK::getErrorCodeMessage(initAck, __func__);
+          }
+          else
+          {
+            std::cout << "Starting Waypoint Mission.\n";
+          }
+
           continue;
         }
         if (msg_type == "MoveOffsetRequest"){
           std::cout << "Move Offset ..." << std::endl;
+          Json::Value v = root["MoveOffsetRequest"];
+          int xOffset = v["xOffset"].asInt();
+          int yOffset = v["yOffset"].asInt();
+          int zOffset = v["zOffset"].asInt();
+          int yawDesired = v["yawDesired"].asInt();
+          int posThresholdInM = v["posThresholdInM"].asInt();
+          int yawThresholdInDeg = v["yawThresholdInDeg"].asInt();
+
+          if (!inprogress) {
+              inprogress = true;
+              bool result = moveByPositionOffset(vehicle, xOffset, yOffset, zOffset,
+                                   yawDesired, posThresholdInM, yawThresholdInDeg);
+              if (result) {
+                  std::cout << "Move Offset successful!" << std::endl;
+              } else {
+                  std::cerr << "Move Offset failed!" << std::endl;
+              }
+              inprogress = false;
+          }
           continue;
         }
         if (msg_type == "TelemetryRequest"){
@@ -1066,4 +1130,36 @@ toEulerAngle(void* quaternionData)
   ans.z = atan2(t1, t0);
 
   return ans;
+}
+
+
+void
+setWaypointInitDefaults(WayPointInitSettings* fdata)
+{
+    fdata->maxVelocity    = 10;
+    fdata->idleVelocity   = 5;
+    fdata->finishAction   = 0;
+    fdata->executiveTimes = 1;
+    fdata->yawMode        = 0;
+    fdata->traceMode      = 0;
+    fdata->RCLostAction   = 1;
+    fdata->gimbalPitch    = 0;
+    fdata->latitude       = 0;
+    fdata->longitude      = 0;
+    fdata->altitude       = 0;
+}
+
+
+std::vector<DJI::OSDK::WayPointSettings> createWaypoints(Json::Value wp_array){
+  // Let's create a vector to store our waypoints in.
+  std::vector<DJI::OSDK::WayPointSettings> wp_list;
+
+  for (int i=0; i < wp_array.size(); i++){
+    WayPointSettings  wp;
+    wp.longitude = wp_array[i][0].asDouble();
+    wp.latitude = wp_array[i][1].asDouble();
+    wp.altitude = wp_array[i][2].asFloat();
+    wp_list.push_back(wp);
+  }
+  return wp_list;
 }
