@@ -212,10 +212,11 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
           std::cout << "Monitor landing ..." << std::endl;
           continue;
         }
-        if (msg_type == "WayPointRequest"){
-          std::cout << "Go WayPoints..." << std::endl;
-          Json::Value data = root["WayPointRequest"];
+        if (msg_type == "WayPointStartRequest"){
+          std::cout << "Start WayPoint Mission..." << std::endl;
+          Json::Value data = root["WayPointStartRequest"];
           Json::Value wp_array = data["WayPoints"];
+          float32_t cruise_speed = data["CruiseSpeed"].asFloat();
 
           // starting height of vehicle
           float32_t start_alt = data["StartAlt"].asFloat();
@@ -234,6 +235,10 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
           // Waypoint Mission : Initialization
           WayPointInitSettings fdata;
           setWaypointInitDefaults(&fdata);
+          if (cruise_speed > 0 && cruise_speed <= fdata.maxVelocity) {
+            fdata.idleVelocity = cruise_speed;
+          }
+          printf("Cruise Speed: %f\n", fdata.idleVelocity);
           fdata.indexNumber = (uint8_t) numWaypoints + 1;
 
           ACK::ErrorCode initAck = vehicle->missionManager->init(
@@ -260,7 +265,7 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
                   vehicle->missionManager->wpMission->start(responseTimeout);
           if (ACK::getError(startAck))
           {
-            ACK::getErrorCodeMessage(initAck, __func__);
+            ACK::getErrorCodeMessage(startAck, __func__);
           }
           else
           {
@@ -272,6 +277,57 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
                     vehicle->subscribe->removePackage(1, responseTimeout);
           }
           continue;
+        }
+        if (msg_type == "WayPointStopRequest") {
+          std::cout << "Stop WayPoints Mission..." << std::endl;
+          Json::Value data = root["WayPointStopRequest"];
+          int time_out = data["time_out"].asInt();
+
+          // Waypoint Mission: Stop
+          ACK::ErrorCode stopAck =
+                  vehicle->missionManager->wpMission->stop(time_out);
+          if (ACK::getError(stopAck))
+          {
+            ACK::getErrorCodeMessage(stopAck, __func__);
+          }
+          else
+          {
+            std::cout << "Stopping Waypoint Mission.\n";
+          }
+        }
+        if (msg_type == "WayPointPauseRequest") {
+          std::cout << "Pause WayPoints Mission..." << std::endl;
+          Json::Value data = root["WayPointPauseRequest"];
+          int time_out = data["time_out"].asInt();
+
+          // Waypoint Mission: Pause
+          ACK::ErrorCode pauseAck =
+                  vehicle->missionManager->wpMission->pause(time_out);
+          if (ACK::getError(pauseAck))
+          {
+            ACK::getErrorCodeMessage(pauseAck, __func__);
+          }
+          else
+          {
+            std::cout << "Pausing Waypoint Mission.\n";
+          }
+        }
+        if (msg_type == "WayPointResumeRequest") {
+          std::cout << "Resume WayPoints Mission..." << std::endl;
+          Json::Value data = root["WayPointResumeRequest"];
+          int time_out = data["time_out"].asInt();
+
+          // Waypoint Mission: Resume
+          ACK::ErrorCode resumeAck =
+                  vehicle->missionManager->wpMission->resume(time_out);
+          if (ACK::getError(resumeAck))
+          {
+            ACK::getErrorCodeMessage(resumeAck, __func__);
+          }
+          else
+          {
+            std::cout << "Resuming Waypoint Mission.\n";
+          }
         }
         if (msg_type == "MoveOffsetRequest"){
           std::cout << "Move Offset ..." << std::endl;
