@@ -81,6 +81,15 @@ void localOffsetFromGpsOffset(DJI::OSDK::Vehicle*             vehicle,
 
 DJI::OSDK::Telemetry::Vector3f toEulerAngle(void* quaternionData);
 
-std::vector<DJI::OSDK::WayPointSettings> createWaypoints(Json::Value wp_array);
+std::vector<DJI::OSDK::WayPointSettings> createWaypoints(DJI::OSDK::Vehicle* vehicle,
+                                                         Json::Value wp_array,
+                                                         DJI::OSDK::float32_t start_alt);
+
+void setWaypointDefaults(DJI::OSDK::WayPointSettings* wp);
+void setWaypointInitDefaults(DJI::OSDK::WayPointInitSettings* fdata);
+void uploadWaypoints(DJI::OSDK::Vehicle*                       vehicle,
+                     std::vector<DJI::OSDK::WayPointSettings>& wp_list,
+                     int                                       responseTimeout);
+bool setUpSubscription(DJI::OSDK::Vehicle* vehicle, int responseTimeout);
 
 #endif // DJIOSDK_MISSIONCONTROL_HPP

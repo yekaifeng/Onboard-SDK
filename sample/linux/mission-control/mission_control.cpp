@@ -127,7 +127,8 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
 
         message = AmqpClient::BasicMessage::Create(json_str);
         channel->BasicPublish(exchangeName, "", message);
-        std::cout << "data sent: " << (unsigned)status.flight << currentTime << std::endl;
+        std::cout << "data sent: " << globalPosition.longitude << "," << globalPosition.latitude << ","
+                  << globalPosition.altitude << "  " << currentTime << std::endl;
         usleep(syncDataIntervalInMs);
       }
     }
@@ -176,6 +177,20 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
         }
         msg_type = root.getMemberNames().begin()[0];
         std::cout << "CMD:" << msg_type << std::endl;
+        if (msg_type == "EngineStartRequest"){
+          Json::Value v = root["EngineStartRequest"];
+          int time_out = v["time_out"].asInt();
+          std::cout << "Engine Start Request ..." << std::endl;
+          vehicle->control->armMotors(time_out);
+          continue;
+        }
+        if (msg_type == "EngineStopRequest"){
+          Json::Value v = root["EngineStopRequest"];
+          int time_out = v["time_out"].asInt();
+          std::cout << "Engine Stop Request ..." << std::endl;
+          vehicle->control->disArmMotors(time_out);
+          continue;
+        }
         if (msg_type == "GohomeRequest"){
           Json::Value v = root["GohomeRequest"];
           int time_out = v["time_out"].asInt();
@@ -198,26 +213,47 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
           continue;
         }
         if (msg_type == "WayPointRequest"){
-          std::cout << "Go WayPoings ..." << std::endl;
-          Json::Value wp_array = root["WayPointRequest"];
+          std::cout << "Go WayPoints..." << std::endl;
+          Json::Value data = root["WayPointRequest"];
+          Json::Value wp_array = data["WayPoints"];
 
           // starting height of vehicle
-          float32_t start_alt = 10;
+          float32_t start_alt = data["StartAlt"].asFloat();
           int numWaypoints = wp_array.size();
 
-          // Waypoint Mission: Create Waypoints
-          std::vector<DJI::OSDK::WayPointSettings> generatedWaypts = createWaypoints(wp_array);
+          if (vehicle->getFwVersion() != Version::M100_31)
+          {
+            if (!setUpSubscription(vehicle, responseTimeout))
+            {
+              std::cout << "Failed to set up Subscription!" << std::endl;
+              continue;
+            }
+            sleep(1);
+          }
 
           // Waypoint Mission : Initialization
+          WayPointInitSettings fdata;
+          setWaypointInitDefaults(&fdata);
+          fdata.indexNumber = (uint8_t) numWaypoints + 1;
+
           ACK::ErrorCode initAck = vehicle->missionManager->init(
-                  DJI_MISSION_TYPE::WAYPOINT, responseTimeout, &generatedWaypts);
+                  DJI_MISSION_TYPE::WAYPOINT, responseTimeout, &fdata);
           if (ACK::getError(initAck))
           {
-              ACK::getErrorCodeMessage(initAck, __func__);
+            ACK::getErrorCodeMessage(initAck, __func__);
           }
 
           vehicle->missionManager->printInfo();
           std::cout << "Initializing Waypoint Mission..\n";
+          usleep(200000);
+
+          // Waypoint Mission: Create Waypoints
+          std::vector<DJI::OSDK::WayPointSettings> generatedWaypts = createWaypoints(vehicle,wp_array, start_alt);
+          std::cout << "Creating Waypoints..\n";
+
+          // Waypoint Mission: Upload the waypoints
+          uploadWaypoints(vehicle, generatedWaypts, responseTimeout);
+          std::cout << "Uploading Waypoints..\n";
 
           // Waypoint Mission: Start
           ACK::ErrorCode startAck =
@@ -230,7 +266,11 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
           {
             std::cout << "Starting Waypoint Mission.\n";
           }
-
+          if (vehicle->getFwVersion() != Version::M100_31)
+          {
+            ACK::ErrorCode ack =
+                    vehicle->subscribe->removePackage(1, responseTimeout);
+          }
           continue;
         }
         if (msg_type == "MoveOffsetRequest"){
@@ -240,13 +280,12 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
           int yOffset = v["yOffset"].asInt();
           int zOffset = v["zOffset"].asInt();
           int yawDesired = v["yawDesired"].asInt();
-          int posThresholdInM = v["posThresholdInM"].asInt();
-          int yawThresholdInDeg = v["yawThresholdInDeg"].asInt();
+          //int posThresholdInM = v["posThresholdInM"].asInt();
+          //int yawThresholdInDeg = v["yawThresholdInDeg"].asInt();
 
           if (!inprogress) {
               inprogress = true;
-              bool result = moveByPositionOffset(vehicle, xOffset, yOffset, zOffset,
-                                   yawDesired, posThresholdInM, yawThresholdInDeg);
+              bool result = moveByPositionOffset(vehicle, xOffset, yOffset, zOffset, yawDesired);
               if (result) {
                   std::cout << "Move Offset successful!" << std::endl;
               } else {
@@ -423,6 +462,8 @@ monitoredTakeoff(Vehicle* vehicle, int timeout)
       pkgIndex, numTopic, topicList10Hz, enableTimestamp, freq);
     if (!(pkgStatus))
     {
+      // Cleanup before return
+      vehicle->subscribe->removePackage(pkgIndex, timeout);
       return pkgStatus;
     }
     subscribeStatus = vehicle->subscribe->startPackage(pkgIndex, timeout);
@@ -654,6 +695,8 @@ moveByPositionOffset(Vehicle* vehicle, float xOffsetDesired,
       pkgIndex, numTopic, topicList50Hz, enableTimestamp, freq);
     if (!(pkgStatus))
     {
+      // Cleanup before return
+      vehicle->subscribe->removePackage(pkgIndex, 5);
       return pkgStatus;
     }
     subscribeStatus =
@@ -930,6 +973,8 @@ monitoredLanding(Vehicle* vehicle, int timeout)
       pkgIndex, numTopic, topicList10Hz, enableTimestamp, freq);
     if (!(pkgStatus))
     {
+      // Cleanup before return
+      vehicle->subscribe->removePackage(pkgIndex, timeout);
       return pkgStatus;
     }
     subscribeStatus = vehicle->subscribe->startPackage(pkgIndex, timeout);
@@ -1149,17 +1194,137 @@ setWaypointInitDefaults(WayPointInitSettings* fdata)
     fdata->altitude       = 0;
 }
 
+void
+setWaypointDefaults(WayPointSettings* wp) {
+  wp->damping = 0;
+  wp->yaw = 0;
+  wp->gimbalPitch = 0;
+  wp->turnMode = 0;
+  wp->hasAction = 0;
+  wp->actionTimeLimit = 100;
+  wp->actionNumber = 0;
+  wp->actionRepeat = 0;
+  for (int i = 0; i < 16; ++i) {
+    wp->commandList[i] = 0;
+    wp->commandParameter[i] = 0;
+  }
+  for (int i = 0; i < 8; ++i)
+  {
+    wp->reserved[i] = 0;
+  }
+}
 
-std::vector<DJI::OSDK::WayPointSettings> createWaypoints(Json::Value wp_array){
+std::vector<DJI::OSDK::WayPointSettings>
+createWaypoints(DJI::OSDK::Vehicle* vehicle,Json::Value wp_array, float32_t start_alt){
+  // Create Start Waypoint
+  WayPointSettings start_wp;
+  setWaypointDefaults(&start_wp);
+
+  // Global position retrieved via subscription
+  Telemetry::TypeMap<TOPIC_GPS_FUSED>::type subscribeGPosition;
+  // Global position retrieved via broadcast
+  Telemetry::GlobalPosition broadcastGPosition;
+
+  if (vehicle->getFwVersion() != Version::M100_31)
+  {
+    subscribeGPosition = vehicle->subscribe->getValue<TOPIC_GPS_FUSED>();
+    start_wp.latitude  = subscribeGPosition.latitude;
+    start_wp.longitude = subscribeGPosition.longitude;
+    start_wp.altitude  = start_alt;
+    printf("Waypoint created at (LLA): %f \t%f \t%f\n",
+           subscribeGPosition.latitude, subscribeGPosition.longitude,
+           start_alt);
+  }
+  else
+  {
+    broadcastGPosition = vehicle->broadcast->getGlobalPosition();
+    start_wp.latitude  = broadcastGPosition.latitude;
+    start_wp.longitude = broadcastGPosition.longitude;
+    start_wp.altitude  = start_alt;
+    printf("Waypoint created at (LLA): %f \t%f \t%f\n",
+           broadcastGPosition.latitude, broadcastGPosition.longitude,
+           start_alt);
+  }
   // Let's create a vector to store our waypoints in.
   std::vector<DJI::OSDK::WayPointSettings> wp_list;
 
+  // First waypoint
+  start_wp.index = 0;
+  wp_list.push_back(start_wp);
+
   for (int i=0; i < wp_array.size(); i++){
     WayPointSettings  wp;
-    wp.longitude = wp_array[i][0].asDouble();
-    wp.latitude = wp_array[i][1].asDouble();
-    wp.altitude = wp_array[i][2].asFloat();
+    setWaypointDefaults(&wp);
+    wp.index     =  i + 1;
+    wp.longitude = (float64_t) wp_array[i][0].asDouble();
+    wp.latitude = (float64_t) wp_array[i][1].asDouble();
+    wp.altitude = (float32_t) wp_array[i][2].asFloat();
+    std::cout << "wp" << i << ":" << wp.longitude << "," << wp.latitude << ","<< wp.altitude << std::endl;
     wp_list.push_back(wp);
   }
   return wp_list;
+}
+
+void
+uploadWaypoints(Vehicle*                                  vehicle,
+                std::vector<DJI::OSDK::WayPointSettings>& wp_list,
+                int                                       responseTimeout)
+{
+  for (std::vector<WayPointSettings>::iterator wp = wp_list.begin();
+       wp != wp_list.end(); ++wp)
+  {
+    printf("Waypoint created at (LLA): %f \t%f \t%f\n ", wp->latitude,
+           wp->longitude, wp->altitude);
+    ACK::WayPointIndex wpDataACK =
+            vehicle->missionManager->wpMission->uploadIndexData(&(*wp),
+                                                                responseTimeout);
+
+    ACK::getErrorCodeMessage(wpDataACK.ack, __func__);
+  }
+}
+
+
+bool
+setUpSubscription(DJI::OSDK::Vehicle* vehicle, int responseTimeout)
+{
+  // Telemetry: Verify the subscription
+  ACK::ErrorCode subscribeStatus;
+
+  subscribeStatus = vehicle->subscribe->verify(responseTimeout);
+  if (ACK::getError(subscribeStatus) != ACK::SUCCESS)
+  {
+    ACK::getErrorCodeMessage(subscribeStatus, __func__);
+    return false;
+  }
+
+  // Telemetry: Subscribe to flight status and mode at freq 10 Hz
+  int       freq            = 10;
+  TopicName topicList10Hz[] = { TOPIC_GPS_FUSED };
+  int       numTopic        = sizeof(topicList10Hz) / sizeof(topicList10Hz[0]);
+  bool      enableTimestamp = false;
+
+  bool pkgStatus = vehicle->subscribe->initPackageFromTopicList(
+          1, numTopic, topicList10Hz, enableTimestamp, freq);
+  if (!(pkgStatus))
+  {
+    return pkgStatus;
+  }
+
+  // Start listening to the telemetry data
+  subscribeStatus =
+          vehicle->subscribe->startPackage(1, responseTimeout);
+  if (ACK::getError(subscribeStatus) != ACK::SUCCESS)
+  {
+    ACK::getErrorCodeMessage(subscribeStatus, __func__);
+    // Cleanup
+    ACK::ErrorCode ack =
+            vehicle->subscribe->removePackage(1, responseTimeout);
+    if (ACK::getError(ack))
+    {
+      std::cout << "Error unsubscribing; please restart the drone/FC to get "
+              "back to a clean state.\n";
+    }
+    return false;
+  }
+  return true;
 }
