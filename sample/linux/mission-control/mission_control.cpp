@@ -129,7 +129,7 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
 
         message = AmqpClient::BasicMessage::Create(json_str);
         channel->BasicPublish(exchangeName, "", message);
-        std::cout << "data sent: " << globalPosition.longitude << "," << globalPosition.latitude << ","
+        std::cout << "data sent: " << getDegFromRad(globalPosition.longitude) << "," << getDegFromRad(globalPosition.latitude) << ","
                   << globalPosition.altitude << "  " << currentTime << std::endl;
         usleep(syncDataIntervalInMs);
       }
