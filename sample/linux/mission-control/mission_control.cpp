@@ -106,9 +106,11 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
 
 
         flightData["flight_status"] = (unsigned)status.flight;
-        flightData["position_latitude"] = globalPosition.latitude;
-        flightData["position_longitude"] = globalPosition.longitude;
+        flightData["position_latitude"] = getDegFromRad(globalPosition.latitude);
+        flightData["position_longitude"] = getDegFromRad(globalPosition.longitude);
         flightData["position_altitude"] = globalPosition.altitude;
+        flightData["position_height"] = globalPosition.height;
+        flightData["gps_signal"] = globalPosition.health;
         flightData["rc_roll"] = rc.roll;
         flightData["rc_pitch"] = rc.pitch;
         flightData["rc_yaw"] = rc.yaw;
@@ -250,7 +252,7 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
 
           vehicle->missionManager->printInfo();
           std::cout << "Initializing Waypoint Mission..\n";
-          usleep(200000);
+          usleep(100000);
 
           // Waypoint Mission: Create Waypoints
           std::vector<DJI::OSDK::WayPointSettings> generatedWaypts = createWaypoints(vehicle,wp_array, start_alt);
@@ -1312,8 +1314,8 @@ createWaypoints(DJI::OSDK::Vehicle* vehicle,Json::Value wp_array, float32_t star
     WayPointSettings  wp;
     setWaypointDefaults(&wp);
     wp.index     =  i + 1;
-    wp.longitude = (float64_t) wp_array[i][0].asDouble();
-    wp.latitude = (float64_t) wp_array[i][1].asDouble();
+    wp.longitude = (float64_t) getRadFromDeg(wp_array[i][0].asDouble());
+    wp.latitude = (float64_t) getRadFromDeg(wp_array[i][1].asDouble());
     wp.altitude = (float32_t) wp_array[i][2].asFloat();
     std::cout << "wp" << i << ":" << wp.longitude << "," << wp.latitude << ","<< wp.altitude << std::endl;
     wp_list.push_back(wp);

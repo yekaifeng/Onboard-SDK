@@ -34,6 +34,7 @@
 
 #define C_EARTH (double)6378137.0
 #define DEG2RAD 0.01745329252
+#define M_PI 3.14159265358979323846
 
 //!@note: All the default timeout parameters are for acknowledgement packets
 //! from the aircraft.
@@ -92,4 +93,6 @@ void uploadWaypoints(DJI::OSDK::Vehicle*                       vehicle,
                      int                                       responseTimeout);
 bool setUpSubscription(DJI::OSDK::Vehicle* vehicle, int responseTimeout);
 
+inline double getDegFromRad(double rad){return rad * (180/M_PI);}
+inline double getRadFromDeg(double deg){return deg * (M_PI/180);}
 #endif // DJIOSDK_MISSIONCONTROL_HPP
