@@ -60,6 +60,7 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
 {
   bool running = true;
   int syncDataIntervalInMs = 1000000;
+  std::string hostname = getHostname();
   while(running) {
     try {
       std::string exchangeName = getHostname() + "-uplink";
@@ -122,7 +123,9 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
         flightData["quaternion_x"] = quaternion.q1;
         flightData["quaternion_y"] = quaternion.q2;
         flightData["quaternion_z"] = quaternion.q3;
+        root["message_type"] = "monitor";
         root["basic_data"] = flightData;
+        root["machine_id"] = hostname;
         root["timestamp"] = currentTime;
         json_str = "";
         json_str = writer.write(root);
