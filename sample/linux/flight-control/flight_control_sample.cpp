@@ -877,6 +877,7 @@ moveByattitudeAndVertPosCtrl(Vehicle* vehicle){
   sleep(2);
 
   stopMoving(vehicle);
+  return 0;
 }
 
 int
