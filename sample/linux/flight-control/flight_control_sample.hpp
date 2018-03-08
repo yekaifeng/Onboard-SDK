@@ -76,4 +76,5 @@ DJI::OSDK::Telemetry::Vector3f toEulerAngle(void* quaternionData);
 
 
 int moveByattitudeAndVertPosCtrl(DJI::OSDK::Vehicle* vehiclePtr);
+int stopMoving(DJI::OSDK::Vehicle* vehiclePtr);
 #endif // DJIOSDK_FLIGHTCONTROL_HPP
