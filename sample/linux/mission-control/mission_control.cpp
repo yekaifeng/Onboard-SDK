@@ -219,11 +219,11 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
         }
         if (msg_type == "AttitudeMoveRequest"){
           Json::Value data = root["AttitudeMoveRequest"];
-          float roll = data['Roll'].asFloat(); //in degree
-          float pitch = data['Pitch'].asFloat(); //in degree
-          float height = data['Height'].asFloat(); //in z axis of ground frame(m)
-          float yaw = data['Yaw'].asFloat(); //in z axis of ground frame (NED) (deg)
-          printf("AttitudeMove:(roll, pitch, height, yaw): %x, %x, %x, %x\n");
+          float32_t roll = data["Roll"].asFloat(); //in degree
+          float32_t pitch = data["Pitch"].asFloat(); //in degree
+          float32_t height = data["Height"].asFloat(); //in z axis of ground frame(m)
+          float32_t yaw = data["Yaw"].asFloat(); //in z axis of ground frame (NED) (deg)
+          printf("AttitudeMove:(roll, pitch, height, yaw): %f, %f, %f, %f\n",roll,pitch,height,yaw);
           vehicle->control->attitudeAndVertPosCtrl(roll, pitch, height, yaw);
           continue;
         }
