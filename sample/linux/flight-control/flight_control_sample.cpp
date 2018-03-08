@@ -47,6 +47,10 @@ main(int argc, char** argv)
   std::cout
     << "| [b] Monitored Takeoff + Position Control + Landing             |"
     << std::endl;
+  std::cout
+    << "| [c] Joystick Position Control                                  |"
+    << std::endl;
+
   char inputChar;
   std::cin >> inputChar;
 
@@ -61,6 +65,11 @@ main(int argc, char** argv)
       moveByPositionOffset(vehicle, 0, 6, 6, 30);
       moveByPositionOffset(vehicle, 6, 0, -3, -30);
       moveByPositionOffset(vehicle, -6, -6, 0, 0);
+      monitoredLanding(vehicle);
+      break;
+    case 'c':
+      monitoredTakeoff(vehicle);
+      moveByattitudeAndVertPosCtrl(vehicle);
       monitoredLanding(vehicle);
       break;
     default:
@@ -814,4 +823,66 @@ toEulerAngle(void* quaternionData)
   ans.z = atan2(t1, t0);
 
   return ans;
+}
+
+int
+moveByattitudeAndVertPosCtrl(Vehicle* vehicle){
+  //attitude set-point in x axis of body frame (FRU) (deg)
+  float roll_positive = 10; //Go East
+  float roll_negative = -10; //Go West
+  float pitch_positive = 10; //Go South
+  float pitch_negative = -10; //Go North
+  float yaw_clockwise = 45;
+  float yaw_counter_clockwise = -45;
+  float height_upward = 5; //Meters
+  float height_downward = -5;
+
+  std::cout << "Go East ...\n";
+  vehicle->control->attitudeAndVertPosCtrl(roll_positive, 0, 0, 0);
+  sleep(2);
+
+  stopMoving(vehicle);
+  std::cout << "Go West ...\n";
+  vehicle->control->attitudeAndVertPosCtrl(roll_negative, 0, 0, 0);
+  sleep(2);
+
+  stopMoving(vehicle);
+  std::cout << "Go South ...\n";
+  vehicle->control->attitudeAndVertPosCtrl(0, pitch_positive, 0, 0);
+  sleep(2);
+
+  stopMoving(vehicle);
+  std::cout << "Go North ...\n";
+  vehicle->control->attitudeAndVertPosCtrl(0, pitch_negative, 0, 0);
+  sleep(2);
+
+  stopMoving(vehicle);
+  std::cout << "Yaw Clockwise ...\n";
+  vehicle->control->attitudeAndVertPosCtrl(0, 0, yaw_clockwise, 0);
+  sleep(2);
+
+  stopMoving(vehicle);
+  std::cout << "Yaw Counter Clockwise ...\n";
+  vehicle->control->attitudeAndVertPosCtrl(0, 0, yaw_counter_clockwise, 0);
+  sleep(2);
+
+  stopMoving(vehicle);
+  std::cout << "Upwards ...\n";
+  vehicle->control->attitudeAndVertPosCtrl(0, 0, 0, height_upward);
+  sleep(2);
+
+  stopMoving(vehicle);
+  std::cout << "Downwards ...\n";
+  vehicle->control->attitudeAndVertPosCtrl(0, 0, 0, height_downward);
+  sleep(2);
+
+  stopMoving(vehicle);
+}
+
+int
+stopMoving(Vehicle* vehicle)
+{
+  vehicle->control->attitudeAndVertPosCtrl(0, 0, 0, 0);
+  usleep(200000);
+  return 0;
 }
