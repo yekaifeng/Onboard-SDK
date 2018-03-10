@@ -877,6 +877,11 @@ moveByattitudeAndVertPosCtrl(Vehicle* vehicle){
   sleep(2);
 
   stopMoving(vehicle);
+
+  std::cout << "angularRateAndVertPosCtrl ...\n";
+  vehicle->control->angularRateAndVertPosCtrl(5, 0, 0, 0);
+  sleep(2);
+  vehicle->control->angularRateAndVertPosCtrl(-5, 0, 0, 0);
   return 0;
 }
 
