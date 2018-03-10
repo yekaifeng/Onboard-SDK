@@ -224,7 +224,16 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
           float32_t yaw = data["Yaw"].asFloat(); //in z axis of ground frame (NED) (deg)
           float32_t height = data["Height"].asFloat(); //in z axis of ground frame(m)
           printf("AttitudeMove:(roll, pitch, yaw, height): %f, %f, %f, %f\n",roll,pitch,yaw,height);
-          vehicle->control->attitudeAndVertPosCtrl(roll, pitch, yaw, height);
+
+          //calculate the yaw delta to actual yaw value
+          float32_t actual_yaw = 0;
+          if (yaw == 0 ) {
+            actual_yaw = vehicle->broadcast->getQuaternion().q3;
+          } else {
+            actual_yaw = vehicle->broadcast->getQuaternion().q3 + yaw;
+          }
+
+          vehicle->control->attitudeAndVertPosCtrl(roll, pitch, actual_yaw, height);
           continue;
         }
         if (msg_type == "WayPointStartRequest"){
