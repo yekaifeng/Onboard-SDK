@@ -106,23 +106,23 @@ void channelSend(DJI::OSDK::Vehicle* vehicle, const std::string host, const std:
         quaternion     = vehicle->broadcast->getQuaternion();
 
 
-        flightData["flight_status"] = (unsigned)status.flight;
-        flightData["position_latitude"] = getDegFromRad(globalPosition.latitude);
-        flightData["position_longitude"] = getDegFromRad(globalPosition.longitude);
-        flightData["position_altitude"] = globalPosition.altitude;
-        flightData["position_height"] = globalPosition.height;
+        flightData["flt_status"] = (unsigned)status.flight;
+        flightData["pos_lat"] = getDegFromRad(globalPosition.latitude);
+        flightData["pos_lng"] = getDegFromRad(globalPosition.longitude);
+        flightData["pos_alt"] = globalPosition.altitude;
+        flightData["pos_height"] = globalPosition.height;
         flightData["gps_signal"] = globalPosition.health;
         flightData["rc_roll"] = rc.roll;
         flightData["rc_pitch"] = rc.pitch;
         flightData["rc_yaw"] = rc.yaw;
         flightData["rc_throttle"] = rc.throttle;
-        flightData["velocity_vx"] = velocity.x;
-        flightData["velocity_vy"] = velocity.y;
-        flightData["velocity_vz"] = velocity.z;
-        flightData["quaternion_w"] = quaternion.q0;
-        flightData["quaternion_x"] = quaternion.q1;
-        flightData["quaternion_y"] = quaternion.q2;
-        flightData["quaternion_z"] = quaternion.q3;
+        flightData["velo_vx"] = velocity.x;
+        flightData["velo_vy"] = velocity.y;
+        flightData["velo_vz"] = velocity.z;
+        flightData["quater_w"] = quaternion.q0;
+        flightData["quater_x"] = quaternion.q1;
+        flightData["quater_y"] = quaternion.q2;
+        flightData["quater_z"] = quaternion.q3;
         root["message_type"] = "monitor";
         root["basic_data"] = flightData;
         root["machine_id"] = hostname;
@@ -226,14 +226,32 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
           printf("AttitudeMove:(roll, pitch, yaw, height): %f, %f, %f, %f\n",roll,pitch,yaw,height);
 
           //calculate the yaw delta to actual yaw value
-          float32_t actual_yaw = 0;
-          if (yaw == 0 ) {
-            actual_yaw = vehicle->broadcast->getQuaternion().q3;
+          float32_t desiredYaw;
+          // Quaternion retrieved via broadcast
+          Telemetry::Quaternion broadcastQ;
+          double yawInDeg;
+
+          broadcastQ = vehicle->broadcast->getQuaternion();
+          yawInDeg   = toEulerAngle((static_cast<void*>(&broadcastQ))).z;
+
+          if ( yaw == 0 ) {
+            desiredYaw = yawInDeg;
           } else {
-            actual_yaw = vehicle->broadcast->getQuaternion().q3 + yaw;
+            desiredYaw = yawInDeg + yaw;
           }
 
-          vehicle->control->attitudeAndVertPosCtrl(roll, pitch, actual_yaw, height);
+          //calculate the desired height value (ground frame)
+          float32_t desiredHeight;
+          //get current relative height to the ground
+          float32_t currentHeight = vehicle->broadcast->getGlobalPosition().height;
+          if ( height == 0 ) {
+            desiredHeight = currentHeight;
+          } else {
+            desiredHeight = currentHeight + height;
+          }
+
+          vehicle->control->attitudeAndVertPosCtrl(roll, pitch, desiredYaw, desiredHeight);
+          printf("AttitudeMove:(roll, pitch, desiredYaw, desiredHeight): %f, %f, %f, %f\n",roll,pitch,desiredYaw,desiredHeight);
           continue;
         }
         if (msg_type == "WayPointStartRequest"){
@@ -462,43 +480,6 @@ main(int argc, char** argv)
       std::cerr << ex.what() << std::endl;
   }
 
-
-
-
-
-
-
-/*
-  // Display interactive prompt
-  std::cout
-    << "| Available commands:                                            |"
-    << std::endl;
-  std::cout
-    << "| [a] Monitored Takeoff + Landing                                |"
-    << std::endl;
-  std::cout
-    << "| [b] Monitored Takeoff + Position Control + Landing             |"
-    << std::endl;
-  char inputChar;
-  std::cin >> inputChar;
-
-  switch (inputChar)
-  {
-    case 'a':
-      monitoredTakeoff(vehicle);
-      monitoredLanding(vehicle);
-      break;
-    case 'b':
-      monitoredTakeoff(vehicle);
-      moveByPositionOffset(vehicle, 0, 6, 6, 30);
-      moveByPositionOffset(vehicle, 6, 0, -3, -30);
-      moveByPositionOffset(vehicle, -6, -6, 0, 0);
-      monitoredLanding(vehicle);
-      break;
-    default:
-      break;
-  }
-*/
   delete (vehicle);
   return 0;
 }
