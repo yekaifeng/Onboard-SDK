@@ -232,7 +232,7 @@ void channelReceive(DJI::OSDK::Vehicle* vehicle, const std::string host, const s
           double yawInDeg;
 
           broadcastQ = vehicle->broadcast->getQuaternion();
-          yawInDeg   = toEulerAngle((static_cast<void*>(&broadcastQ))).z;
+          yawInDeg   = getDegFromRad(toEulerAngle((static_cast<void*>(&broadcastQ))).z);
 
           if ( yaw == 0 ) {
             desiredYaw = yawInDeg;
